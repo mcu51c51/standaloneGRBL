@@ -20,4 +20,4 @@ An open source, embedded, high performance CNC laser cutting and engraving contr
 ### DOWNLOADS
 IMAGE2GCODE: [image-to-gcode.exe](https://github.com/RunnyBore604/image2gcode/blob/master/build/image-to-gcode.exe?raw=true)
 
-FIRMWARE: [grbl_v1.1-standalone.hex](/build/grbl_v1.1-standalone.hex?raw=true) (Right-click -> 'Save link as...')
+FIRMWARE: [grbl_v1.1-standalone.hex](/build/grbl_v1.1-standalone.hex?raw=true) (Right-click > 'Save link as...')
