@@ -137,6 +137,17 @@ void protocol_main_loop() {
                   if (fd) {
                     lcd_clear();
 
+                    sys.f_override = 100;
+                    pl_data.feed_rate = 1201.2;
+                    pl_data.spindle_speed = 255;
+                    pl_data.dwell = 0;
+                    pl_data.units = 0;
+                    pl_data.distance = 0;
+                    pl_data.laserOn = 1;
+                    pl_data.condition = PL_COND_FLAG_RAPID_MOTION;
+                    pl_data.gc_pos[X_AXIS] = ((pl_data.xyz[X_AXIS] = plan_get_position(X_AXIS)) - wco[X_AXIS]) / settings.steps_per_mm[X_AXIS];
+                    pl_data.gc_pos[Y_AXIS] = ((pl_data.xyz[Y_AXIS] = plan_get_position(Y_AXIS)) - wco[Y_AXIS]) / settings.steps_per_mm[Y_AXIS];
+                    spindle_set_speed(SPINDLE_PWM_OFF_VALUE); lcd_state2();
                     char_counter = 0; val = STATUS_OK;
                     while ((c = fat_read_byte(fd)) != 0xff) {
                       if (c == ';') {
@@ -153,7 +164,22 @@ void protocol_main_loop() {
 
                         char_counter = 0;
 
-                      } else if (c != '\r' && c != '\n') {
+                      } else if (c == '\r' || c == '\n') {
+                        if (char_counter > 0) {
+                          if (sys.abort) { break; }
+
+                          if (sys.state != STATE_HOLD) {
+                            protocol_execute_realtime();
+                            if (sys.abort) { break; } }
+
+                          line[char_counter] = 0;
+
+                          if ((val = gc_execute_line2(line)) != STATUS_OK) {
+                            break; }
+
+                          char_counter = 0; }
+
+                      } else if (c != ' ') {
 
                         if (char_counter >= (LINE_BUFFER_SIZE-1)) {
                           val = STATUS_OVERFLOW; break;

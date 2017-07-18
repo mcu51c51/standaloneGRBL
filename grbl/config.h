@@ -4,16 +4,16 @@
 #include "grbl.h"
 
 #define BAUD_RATE 115200
-#define RX_BUFFER_SIZE 32
-#define TX_BUFFER_SIZE 50
+#define RX_BUFFER_SIZE 30
+#define TX_BUFFER_SIZE 20
 
-#define BLOCK_BUFFER_SIZE 16
+#define BLOCK_BUFFER_SIZE 15
 #define SETTINGS_VERSION 31
 
 #define LINE_BUFFER_SIZE 30
 
-#define GRBL_VERSION "1.0s"
-#define GRBL_VERSION_BUILD "20170701"
+#define GRBL_VERSION "1.1s"
+#define GRBL_VERSION_BUILD "20170717"
 
 #define CMD_RESET 0x18
 #define CMD_CYCLE_START '~'

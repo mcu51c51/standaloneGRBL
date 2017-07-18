@@ -1,8 +1,9 @@
 #include "grbl.h"
 
 void system_init() {
-  CONTROL_DDR &= ~CONTROL_MASK;
-  CONTROL_PORT |= CONTROL_MASK; }
+  //CONTROL_DDR &= ~CONTROL_MASK;
+  //CONTROL_PORT |= CONTROL_MASK;
+  ADCSRA |= ((1<<ADPS2)|(1<<ADPS1)|(1<<ADPS0)|(1<<ADEN)); }
 
 void buttons_check() {
   uint8_t val;
@@ -92,9 +93,7 @@ void buttons_check() {
       btn = 1; } } }
 
 uint8_t adc_read(uint8_t pin) {
-  ADMUX = pin;
-  ADMUX |= ((1<<REFS0)|(1<<ADLAR));
-  ADCSRA |= ((1<<ADPS2)|(1<<ADPS1)|(1<<ADPS0)|(1<<ADEN));
+  ADMUX = ((1<<REFS0)|(1<<ADLAR)) | (pin & 0x07);
   _delay_us(1);
   ADCSRA |= (1<<ADSC);
   while (ADCSRA & (1<<ADSC)) {}

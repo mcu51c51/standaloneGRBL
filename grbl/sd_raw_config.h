@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define SD_RAW_SDHC 0
+#define SD_RAW_SDHC 1
 
 #if SD_RAW_SDHC
   typedef uint64_t offset_t;

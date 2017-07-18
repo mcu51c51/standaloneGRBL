@@ -72,7 +72,6 @@ uint8_t limits_go_home() {
 
     if (i & EXEC_CYCLE_STOP) {
       sys.state = STATE_ALARM;
-      //system_clear_exec_state_flag(EXEC_CYCLE_STOP);
       sys_rt_exec_state &= ~EXEC_CYCLE_STOP;
       return(STATUS_HOMING_FAIL_PULLOFF); }
 

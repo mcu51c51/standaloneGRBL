@@ -25,11 +25,14 @@ typedef struct {
 
 typedef struct {
   int32_t xyz[N_AXIS];
+  float gc_pos[N_AXIS];
   uint8_t spindle_speed;
   uint16_t dwell;
   bool laserOn;
   float feed_rate;
   uint8_t condition;
+  uint8_t units;
+  uint8_t distance;
 } plan_line_data_t;
 extern plan_line_data_t pl_data;
 
