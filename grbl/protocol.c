@@ -164,7 +164,7 @@ void protocol_main_loop() {
 
                         char_counter = 0;
 
-                      } else if (c == '\r' || c == '\n') {
+                      } else if (c == '\n' || c == '\r') {
                         if (char_counter > 0) {
                           if (sys.abort) { break; }
 
