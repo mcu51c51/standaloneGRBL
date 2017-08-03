@@ -49,6 +49,11 @@ extern int32_t wco[N_AXIS];
 
 extern volatile uint8_t sys_rt_exec_state;
 
+#ifdef COREXY
+  int32_t system_convert_corexy_to_x_axis_steps(int32_t *steps);
+  int32_t system_convert_corexy_to_y_axis_steps(int32_t *steps);
+#endif
+
 void system_init();
 void buttons_check();
 uint8_t adc_read(uint8_t pin);

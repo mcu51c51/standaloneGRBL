@@ -139,11 +139,26 @@ uint8_t plan_buffer_line() {
 
   memcpy(position_steps, pl.position, sizeof(pl.position));
 
+  #ifdef COREXY
+    target_steps[A_MOTOR] = pl_data.xyz[X_AXIS];
+    target_steps[B_MOTOR] = pl_data.xyz[Y_AXIS];
+    block->steps[A_MOTOR] = labs((target_steps[X_AXIS]-position_steps[X_AXIS]) + (target_steps[Y_AXIS]-position_steps[Y_AXIS]));
+    block->steps[B_MOTOR] = labs((target_steps[X_AXIS]-position_steps[X_AXIS]) - (target_steps[Y_AXIS]-position_steps[Y_AXIS]));
+  #endif
+
   for (idx=0; idx<N_AXIS; idx++) {
-    target_steps[idx] = pl_data.xyz[idx];
-    block->steps[idx] = labs(target_steps[idx]-position_steps[idx]);
-    block->step_event_count = max(block->step_event_count, block->steps[idx]);
-    delta_mm = (target_steps[idx] - position_steps[idx])/settings.steps_per_mm[idx];
+    #ifdef COREXY
+      block->step_event_count = max(block->step_event_count, block->steps[idx]);
+      if (idx == A_MOTOR) {
+        delta_mm = (target_steps[X_AXIS]-position_steps[X_AXIS] + target_steps[Y_AXIS]-position_steps[Y_AXIS])/settings.steps_per_mm[idx];
+      } else {
+        delta_mm = (target_steps[X_AXIS]-position_steps[X_AXIS] - target_steps[Y_AXIS]+position_steps[Y_AXIS])/settings.steps_per_mm[idx]; }
+    #else
+      target_steps[idx] = pl_data.xyz[idx];
+      block->steps[idx] = labs(target_steps[idx]-position_steps[idx]);
+      block->step_event_count = max(block->step_event_count, block->steps[idx]);
+      delta_mm = (target_steps[idx] - position_steps[idx])/settings.steps_per_mm[idx];
+    #endif
     unit_vec[idx] = delta_mm;
 
     if (delta_mm < 0.0 ) { block->direction_bits |= get_direction_pin_mask(idx); } }
@@ -201,9 +216,15 @@ uint8_t plan_buffer_line() {
   return(PLAN_OK); }
 
 void plan_sync_position() {
-  uint8_t idx;
-  for (idx=0; idx<N_AXIS; idx++) {
-    pl.position[idx] = sys_position[idx]; } }
+  #ifdef COREXY
+    pl.position[X_AXIS] = system_convert_corexy_to_x_axis_steps(sys_position);
+    pl.position[Y_AXIS] = system_convert_corexy_to_y_axis_steps(sys_position);
+  #else
+    uint8_t idx;
+    for (idx=0; idx<N_AXIS; idx++) {
+      pl.position[idx] = sys_position[idx]; }
+  #endif
+}
 
 int32_t plan_get_position(uint8_t idx) {
   return(pl.position[idx]); }

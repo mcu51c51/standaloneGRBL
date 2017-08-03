@@ -21,6 +21,7 @@ void protocol_main_loop() {
     if (btn_state && !(btn_state & (1<<4))) {
       if (btn_state & (1<<7)) {
         btn_state = 0;
+        #ifndef COREXY
         if ((val = limits_go_home()) != STATUS_OK) {
           lcd_error(val);
           while(1) {
@@ -33,6 +34,7 @@ void protocol_main_loop() {
                 btn = 1; } }
             _delay_ms(10); }
           lcd_clear(); }
+        #endif
       } else if (btn_state & (1<<6)) {
         if (sd_raw_init()) {
           btn_state = 0;

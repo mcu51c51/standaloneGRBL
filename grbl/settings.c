@@ -105,9 +105,10 @@ uint8_t settings_store_global_setting(uint8_t parameter, float value) {
       else { settings.flags &= ~BITFLAG_INVERT_LIMIT_PINS; }
       break;
     case 12:
-      if (int_value) { settings.flags |= BITFLAG_HOMING_ENABLE; }
-      else {
-        settings.flags &= ~BITFLAG_HOMING_ENABLE;
+      #ifndef COREXY
+        if (int_value) { settings.flags |= BITFLAG_HOMING_ENABLE; } else
+      #endif
+      { settings.flags &= ~BITFLAG_HOMING_ENABLE;
         memset(wco, 0, sizeof(wco));
         settings_write_coord_data(); }
       break;

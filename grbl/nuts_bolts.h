@@ -8,6 +8,11 @@
 #define X_AXIS 0
 #define Y_AXIS 1
 
+#ifdef COREXY
+  #define A_MOTOR X_AXIS
+  #define B_MOTOR Y_AXIS
+#endif
+
 #define MM_PER_INCH (25.4)
 #define INCH_PER_MM (0.0393701)
 #define TICKS_PER_MICROSECOND (F_CPU/1000000)

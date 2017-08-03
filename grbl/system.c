@@ -81,14 +81,16 @@ void buttons_check() {
           if (abs(adc_read(CONTROL_OTHER) - val) > 2) { return; }
           btn_state |= (1<<5); }
         btn = 0; }
-    } else if (val < 121) {
-      if (btn) {
-        if (bit_istrue(settings.flags,BITFLAG_HOMING_ENABLE)) {
-          if (sys.state == STATE_IDLE || sys.state == STATE_ALARM) {
-            _delay_ms(30);
-            if (abs(adc_read(CONTROL_OTHER) - val) > 2) { return; }
-            btn_state |= (1<<7); } }
-        btn = 0; }
+    #ifndef COREXY
+      } else if (val < 121) {
+        if (btn) {
+          if (bit_istrue(settings.flags,BITFLAG_HOMING_ENABLE)) {
+            if (sys.state == STATE_IDLE || sys.state == STATE_ALARM) {
+              _delay_ms(30);
+              if (abs(adc_read(CONTROL_OTHER) - val) > 2) { return; }
+              btn_state |= (1<<7); } }
+          btn = 0; }
+    #endif
     } else {
       btn = 1; } } }
 
@@ -125,6 +127,14 @@ uint8_t system_execute_line(char *line) {
       if (line[char_counter] != ';') { return(STATUS_INVALID_STATEMENT); }
       return(settings_store_global_setting(parameter, value)); }
   return(STATUS_INVALID_STATEMENT); }
+
+#ifdef COREXY
+  int32_t system_convert_corexy_to_x_axis_steps(int32_t *steps) {
+    return((steps[A_MOTOR] + steps[B_MOTOR]) / 2); }
+
+  int32_t system_convert_corexy_to_y_axis_steps(int32_t *steps) {
+    return((steps[A_MOTOR] - steps[B_MOTOR]) / 2); }
+#endif
 
 void system_set_exec_state_flag(uint8_t mask) {
   uint8_t sreg = SREG;

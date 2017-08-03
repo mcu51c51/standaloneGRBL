@@ -3,6 +3,8 @@
 
 #include "grbl.h"
 
+//#define COREXY
+
 #define BAUD_RATE 115200
 #define RX_BUFFER_SIZE 30
 #define TX_BUFFER_SIZE 20

@@ -11,7 +11,7 @@ void jog_execute_line(uint8_t i) {
     if (bit_istrue(btn_state,bit(idx))) {
       f_pos = (plan_get_position(idx) - wco[idx]) / settings.steps_per_mm[idx];
       pos = round(f_pos * 10) / 10 + i/10.0;
-      if (pos - f_pos > (0.01 + i/10.0)) {
+      if (pos - f_pos > (0.8/settings.steps_per_mm[idx] + i/10.0)) {
         pos -= i/10.0; }
       pl_data.xyz[idx] = lround(pos*settings.steps_per_mm[idx]) + wco[idx];
       if (bit_istrue(settings.flags, BITFLAG_HOMING_ENABLE)) {
@@ -21,7 +21,7 @@ void jog_execute_line(uint8_t i) {
     } else if (bit_istrue(btn_state,bit(N_AXIS+idx))) {
       f_pos = (plan_get_position(idx) - wco[idx]) / settings.steps_per_mm[idx];
       pos = round(f_pos * 10) / 10 - i/10.0;
-      if (pos - f_pos < -(0.01 + i/10.0)) {
+      if (pos - f_pos < -(0.8/settings.steps_per_mm[idx] + i/10.0)) {
         pos += i/10.0; }
       pl_data.xyz[idx] = lround(pos*settings.steps_per_mm[idx]) + wco[idx];
       if (bit_istrue(settings.flags, BITFLAG_HOMING_ENABLE)) {

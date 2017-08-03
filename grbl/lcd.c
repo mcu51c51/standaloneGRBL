@@ -107,7 +107,15 @@ void lcd_position() {
   float n; uint32_t a;
   unsigned char buf[8];
   for (idx=0; idx<N_AXIS; idx++) {
-    if ((n = (sys_position[idx] - wco[idx]) / settings.steps_per_mm[idx]) != last_position[idx]) {
+    #ifdef COREXY
+      if (idx == A_MOTOR) {
+        n = (system_convert_corexy_to_x_axis_steps(sys_position) - wco[idx]) / settings.steps_per_mm[idx];
+      } else {
+        n = (system_convert_corexy_to_y_axis_steps(sys_position) - wco[idx]) / settings.steps_per_mm[idx]; }
+    #else
+      n = (sys_position[idx] - wco[idx]) / settings.steps_per_mm[idx];
+    #endif
+    if (n != last_position[idx]) {
       last_position[idx] = n;
       isnegative = 0;
       if (n < 0) {

@@ -18,20 +18,23 @@ int main(void) {
   spindle_init();
   limits_init();
 
-  OCR2A = 127;
+  OCR2A = 255;
   TIMSK2 |= (1 << OCIE2A);
 
   memset(sys_position, 0, sizeof(sys_position));
   memset(last_position, 0, sizeof(last_position));
-  settings_read_coord_data();
+  #ifndef COREXY
+    settings_read_coord_data();
+  #else
+    settings.flags &= ~BITFLAG_HOMING_ENABLE;
+    memset(wco, 0, sizeof(wco));
+  #endif
   sei();
 
   memset(&sys, 0, sizeof(system_t));
   memset(&pl_data, 0, sizeof(plan_line_data_t));
   if (bit_istrue(settings.flags,BITFLAG_HOMING_ENABLE)) {
-    sys.state = STATE_ALARM;
-  } else {
-    sys.state = STATE_IDLE; }
+    sys.state = STATE_ALARM; }
   sys.f_override = 100;
 
   report_status_message(STATUS_RESET);
