@@ -140,7 +140,7 @@ void protocol_main_loop() {
                     lcd_clear();
 
                     sys.f_override = 100;
-                    pl_data.feed_rate = 1201.2;
+                    pl_data.feed_rate = 1200;
                     pl_data.spindle_speed = 255;
                     pl_data.dwell = 0;
                     pl_data.units = 0;

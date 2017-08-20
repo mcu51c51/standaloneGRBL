@@ -14,8 +14,7 @@ uint8_t gc_execute_line(char *line) {
         pl_data.xyz[X_AXIS] = lround(f_val*settings.steps_per_mm[X_AXIS]) + wco[X_AXIS];
         if (line[0] == '6') {
           char_counter++;
-          if (!read_float(line, &char_counter, &pl_data.feed_rate)) { return(STATUS_BAD_NUMBER_FORMAT); }
-          pl_data.feed_rate *= 1.001; }
+          if (!read_float(line, &char_counter, &pl_data.feed_rate)) { return(STATUS_BAD_NUMBER_FORMAT); } }
         if (line[char_counter] == ',') {
           char_counter++;
           if (!read_int(line, &char_counter, &pl_data.spindle_speed)) { return(STATUS_BAD_NUMBER_FORMAT); }
@@ -85,6 +84,9 @@ uint8_t gc_execute_line(char *line) {
       if (line[1] != 'W') { return(STATUS_GCODE_UNSUPPORTED_COMMAND); }
       char_counter = 2;
       if (!read_int(line, &char_counter, &value)) { return(STATUS_BAD_NUMBER_FORMAT); }
+      if (line[char_counter] == ',') {
+        char_counter++;
+        if (!read_int(line, &char_counter, &pl_data.spindle_speed)) { return(STATUS_BAD_NUMBER_FORMAT); } }
       if (line[char_counter] != ';') { return(STATUS_GCODE_UNSUPPORTED_COMMAND); }
       protocol_buffer_synchronize();
       if (sys.abort) { return(0); }
@@ -130,7 +132,6 @@ uint8_t gc_execute_line(char *line) {
       } else {
         char_counter = 2;
         if (!read_float(line, &char_counter, &pl_data.feed_rate)) { return(STATUS_BAD_NUMBER_FORMAT); }
-        pl_data.feed_rate *= 1.001;
         char_counter++;
         if (!read_int(line, &char_counter, &value)) { return(STATUS_BAD_NUMBER_FORMAT); }
         if ((sys.f_override = value) < 50) { sys.f_override = 50; }
@@ -255,7 +256,7 @@ uint8_t gc_execute_line2(char *line) {
         pl_data.spindle_speed = trunc(f_val);
         break;
       case 'F':
-        pl_data.feed_rate = f_val * 1.001;
+        pl_data.feed_rate = f_val;
         break;
       case 'P':
         P = ceil(f_val * 1000.0);
