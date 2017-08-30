@@ -35,7 +35,7 @@ void serial_write(uint8_t data) {
 
   UCSR0B |= (1 << UDRIE0); }
 
-ISR(SERIAL_UDRE) {
+ISR(USART_UDRE_vect) {
   uint8_t tail = serial_tx_buffer_tail;
 
   UDR0 = serial_tx_buffer[tail];
@@ -60,20 +60,15 @@ uint8_t serial_read() {
 
     return data; } }
 
-ISR(SERIAL_RX) {
+ISR(USART_RX_vect) {
   uint8_t data = UDR0;
   uint16_t next_head;
 
   switch (data) {
-    case CMD_RESET:
-      system_set_exec_state_flag(EXEC_RESET);
-      break;
-    case CMD_FEED_HOLD:
-      system_set_exec_state_flag(EXEC_FEED_HOLD);
-      break;
-    case CMD_CYCLE_START:
-      system_set_exec_state_flag(EXEC_CYCLE_START);
-      break;
+    case CMD_RESET: system_set_exec_state_flag(EXEC_RESET); break;
+    case CMD_FEED_HOLD: system_set_exec_state_flag(EXEC_FEED_HOLD); break;
+    case CMD_CYCLE_START: system_set_exec_state_flag(EXEC_CYCLE_START); break;
+
     default:
       next_head = serial_rx_buffer_head + 1;
       if (next_head == RX_RING_BUFFER) { next_head = 0; }

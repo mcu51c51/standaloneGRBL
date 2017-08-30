@@ -4,16 +4,8 @@ settings_t settings;
 
 void settings_read_coord_data() {
   if (!(memcpy_from_eeprom_with_checksum((char*)&wco, EEPROM_ADDR_PARAMETERS, sizeof(wco)))) {
-    report_status_message(STATUS_SETTING_READ_FAIL);
     memset(wco, 0, sizeof(wco));
-    settings_write_coord_data(); } }
-
-void settings_write_coord_data() {
-  memcpy_to_eeprom_with_checksum(EEPROM_ADDR_PARAMETERS, (char*)&wco, sizeof(wco)); }
-
-void write_global_settings() {
-  eeprom_put_char(0, SETTINGS_VERSION);
-  memcpy_to_eeprom_with_checksum(EEPROM_ADDR_GLOBAL, (char*)&settings, sizeof(settings_t)); }
+    memcpy_to_eeprom_with_checksum(EEPROM_ADDR_PARAMETERS, (char*)&wco, sizeof(wco)); } }
 
 void settings_restore() {
   settings.step_invert_mask = DEFAULT_STEPPING_INVERT_MASK;
@@ -30,10 +22,11 @@ void settings_restore() {
   settings.acceleration[Y_AXIS] = DEFAULT_XY_MAX_ACCELERATION;
   settings.max_travel[X_AXIS] = DEFAULT_X_MAX_TRAVEL;
   settings.max_travel[Y_AXIS] = DEFAULT_Y_MAX_TRAVEL;
-  write_global_settings();
+  eeprom_put_char(0, SETTINGS_VERSION);
+  memcpy_to_eeprom_with_checksum(EEPROM_ADDR_GLOBAL, (char*)&settings, sizeof(settings_t));
 
   memset(wco, 0, sizeof(wco));
-  settings_write_coord_data(); }
+  memcpy_to_eeprom_with_checksum(EEPROM_ADDR_PARAMETERS, (char*)&wco, sizeof(wco)); }
 
 uint8_t read_global_settings() {
   uint8_t version = eeprom_get_char(0);
@@ -106,13 +99,27 @@ uint8_t settings_store_global_setting(uint8_t parameter, float value) {
       break;
     case 12:
       #ifndef COREXY
-        if (int_value) { settings.flags |= BITFLAG_HOMING_ENABLE; } else
-      #endif
-      { settings.flags &= ~BITFLAG_HOMING_ENABLE;
+      if (bit_istrue(settings.flags,BITFLAG_XY_HOME_PIN_AS_ST_ENABLE)) { break; }
+      if (int_value) { settings.flags |= BITFLAG_HOMING_ENABLE; }
+      else {
+        settings.flags &= ~BITFLAG_HOMING_ENABLE;
         memset(wco, 0, sizeof(wco));
-        settings_write_coord_data(); }
+        memcpy_to_eeprom_with_checksum(EEPROM_ADDR_PARAMETERS, (char*)&wco, sizeof(wco)); }
+      #endif
+      break;
+    case 13:
+      if (int_value) {
+        settings.flags |= BITFLAG_XY_HOME_PIN_AS_ST_ENABLE;
+        settings.flags &= ~BITFLAG_HOMING_ENABLE;
+        memset(wco, 0, sizeof(wco));
+        memcpy_to_eeprom_with_checksum(EEPROM_ADDR_PARAMETERS, (char*)&wco, sizeof(wco));
+        STEPPERS_DISABLE_DDR |= (1<<STEPPERS_DISABLE_BIT);
+      } else {
+        settings.flags &= ~BITFLAG_XY_HOME_PIN_AS_ST_ENABLE;
+        LIMIT_DDR &= ~(1<<XY_LIMIT_BIT);
+        LIMIT_PORT |= (1<<XY_LIMIT_BIT); }
       break;
     default:
       return(STATUS_INVALID_STATEMENT); }
-  write_global_settings();
+  memcpy_to_eeprom_with_checksum(EEPROM_ADDR_GLOBAL, (char*)&settings, sizeof(settings_t));
   return(STATUS_OK); }

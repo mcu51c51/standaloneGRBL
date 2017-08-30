@@ -1,9 +1,4 @@
-#include "byteordering.h"
-#include "partition.h"
-#include "fat.h"
-#include "sd_raw_config.h"
-
-#include <string.h>
+#include "grbl.h"
 
 #define FAT16_CLUSTER_FREE 0x0000
 #define FAT16_CLUSTER_RESERVED_MIN 0xfff0
@@ -22,34 +17,34 @@
 #define FAT_DIRENTRY_DELETED 0xe5
 
 struct fat_header_struct {
-  offset_t size;
+  uint64_t size;
 
-  offset_t fat_offset;
+  uint64_t fat_offset;
   uint32_t fat_size;
 
   uint16_t sector_size;
   uint16_t cluster_size;
 
-  offset_t cluster_zero_offset;
+  uint64_t cluster_zero_offset;
 
-  offset_t root_dir_offset;
-  cluster_t root_dir_cluster; };
+  uint64_t root_dir_offset;
+  uint32_t root_dir_cluster; };
 
 struct fat_fs_struct {
   struct partition_struct* partition;
   struct fat_header_struct header;
-  cluster_t cluster_free; };
+  uint32_t cluster_free; };
 
 struct fat_file_struct {
   struct fat_fs_struct* fs;
   struct fat_dir_entry_struct dir_entry;
-  offset_t pos;
-  cluster_t pos_cluster; };
+  uint64_t pos;
+  uint32_t pos_cluster; };
 
 struct fat_dir_struct {
   struct fat_fs_struct* fs;
   struct fat_dir_entry_struct dir_entry;
-  cluster_t entry_cluster;
+  uint32_t entry_cluster;
   uint16_t entry_offset; };
 
 struct fat_read_dir_callback_arg {
@@ -57,14 +52,58 @@ struct fat_read_dir_callback_arg {
   uintptr_t bytes_read;
   uint8_t finished; };
 
+static struct partition_struct partition_handles[1];
 static struct fat_fs_struct fat_fs_handles[1];
 static struct fat_file_struct fat_file_handles[1];
 static struct fat_dir_struct fat_dir_handles[1];
 
 static uint8_t fat_read_header(struct fat_fs_struct *fs);
-static cluster_t fat_get_next_cluster(const struct fat_fs_struct *fs, cluster_t cluster_num);
-static offset_t fat_cluster_offset(const struct fat_fs_struct *fs, cluster_t cluster_num);
-static uint8_t fat_dir_entry_read_callback(uint8_t *buffer, offset_t offset, void *p);
+static uint32_t fat_get_next_cluster(const struct fat_fs_struct *fs, uint32_t cluster_num);
+static uint64_t fat_cluster_offset(const struct fat_fs_struct *fs, uint32_t cluster_num);
+static uint8_t fat_dir_entry_read_callback(uint8_t *buffer, uint64_t offset, void *p);
+
+struct partition_struct *partition_open(device_read_t device_read, device_read_interval_t device_read_interval, int8_t index) {
+  struct partition_struct *new_partition = 0;
+  uint8_t buffer[0x10];
+
+  if(!device_read || !device_read_interval || index >= 4) {
+    return 0; }
+
+  if(index >= 0) {
+    if(!device_read(0x01be + index * 0x10, buffer, sizeof(buffer))) {
+      return 0; }
+
+    if(buffer[4] == 0x00) {
+      return 0; } }
+
+  new_partition = partition_handles;
+  uint8_t i;
+  for(i = 0; i < 1; ++i) {
+    if(new_partition->type == PARTITION_TYPE_FREE) {
+      break; }
+
+    ++new_partition; }
+
+  if(i >= 1) {
+    return 0; }
+
+  memset(new_partition, 0, sizeof(*new_partition));
+
+  new_partition->device_read = device_read;
+  new_partition->device_read_interval = device_read_interval;
+
+  if(index >= 0) {
+    new_partition->type = buffer[4];
+    new_partition->offset = read32(&buffer[8]);
+    new_partition->length = read32(&buffer[12]);
+  } else {
+    new_partition->type = 0xff; }
+
+  return new_partition; }
+
+void partition_close(struct partition_struct *partition) {
+  if(partition) {
+    partition->type = PARTITION_TYPE_FREE; } }
 
 struct fat_fs_struct *fat_open(struct partition_struct* partition) {
   if(!partition) {
@@ -105,7 +144,7 @@ uint8_t fat_read_header(struct fat_fs_struct *fs) {
 
   uint8_t buffer[37];
 
-  offset_t partition_offset = (offset_t) partition->offset * 512;
+  uint64_t partition_offset = (uint64_t) partition->offset * 512;
   if(!partition->device_read(partition_offset + 0x0b, buffer, sizeof(buffer))) {
     return 0; }
 
@@ -142,32 +181,32 @@ uint8_t fat_read_header(struct fat_fs_struct *fs) {
   struct fat_header_struct *header = &fs->header;
   memset(header, 0, sizeof(*header));
 
-  header->size = (offset_t) sector_count * bytes_per_sector;
+  header->size = (uint64_t) sector_count * bytes_per_sector;
 
-  header->fat_offset = partition_offset + (offset_t) reserved_sectors * bytes_per_sector;
+  header->fat_offset = partition_offset + (uint64_t) reserved_sectors * bytes_per_sector;
   header->fat_size = (data_cluster_count + 2) * (partition->type == PARTITION_TYPE_FAT16 ? 2 : 4);
 
   header->sector_size = bytes_per_sector;
   header->cluster_size = (uint16_t) bytes_per_sector * sectors_per_cluster;
 
   if(partition->type == PARTITION_TYPE_FAT16) {
-    header->root_dir_offset = header->fat_offset + (offset_t) fat_copies * sectors_per_fat * bytes_per_sector;
+    header->root_dir_offset = header->fat_offset + (uint64_t) fat_copies * sectors_per_fat * bytes_per_sector;
 
-    header->cluster_zero_offset = header->root_dir_offset + (offset_t) max_root_entries * 32;
+    header->cluster_zero_offset = header->root_dir_offset + (uint64_t) max_root_entries * 32;
   } else {
-    header->cluster_zero_offset = header->fat_offset + (offset_t) fat_copies * sectors_per_fat32 * bytes_per_sector;
+    header->cluster_zero_offset = header->fat_offset + (uint64_t) fat_copies * sectors_per_fat32 * bytes_per_sector;
 
     header->root_dir_cluster = cluster_root_dir; }
 
   return 1; }
 
-cluster_t fat_get_next_cluster(const struct fat_fs_struct *fs, cluster_t cluster_num) {
+uint32_t fat_get_next_cluster(const struct fat_fs_struct *fs, uint32_t cluster_num) {
   if(!fs || cluster_num < 2) {
     return 0; }
 
   if(fs->partition->type == PARTITION_TYPE_FAT32) {
     uint32_t fat_entry;
-    if(!fs->partition->device_read(fs->header.fat_offset + (offset_t) cluster_num * sizeof(fat_entry), (uint8_t*) &fat_entry, sizeof(fat_entry))) {
+    if(!fs->partition->device_read(fs->header.fat_offset + (uint64_t) cluster_num * sizeof(fat_entry), (uint8_t*) &fat_entry, sizeof(fat_entry))) {
       return 0; }
 
     cluster_num = ltoh32(fat_entry);
@@ -176,7 +215,7 @@ cluster_t fat_get_next_cluster(const struct fat_fs_struct *fs, cluster_t cluster
       return 0; }
   } else {
     uint16_t fat_entry;
-    if(!fs->partition->device_read(fs->header.fat_offset + (offset_t) cluster_num * sizeof(fat_entry), (uint8_t*) &fat_entry, sizeof(fat_entry))) {
+    if(!fs->partition->device_read(fs->header.fat_offset + (uint64_t) cluster_num * sizeof(fat_entry), (uint8_t*) &fat_entry, sizeof(fat_entry))) {
       return 0; }
 
     cluster_num = ltoh16(fat_entry);
@@ -186,11 +225,11 @@ cluster_t fat_get_next_cluster(const struct fat_fs_struct *fs, cluster_t cluster
 
   return cluster_num; }
 
-offset_t fat_cluster_offset(const struct fat_fs_struct *fs, cluster_t cluster_num) {
+uint64_t fat_cluster_offset(const struct fat_fs_struct *fs, uint32_t cluster_num) {
   if(!fs || cluster_num < 2) {
     return 0; }
 
-  return fs->header.cluster_zero_offset + (offset_t) (cluster_num - 2) * fs->header.cluster_size; }
+  return fs->header.cluster_zero_offset + (uint64_t) (cluster_num - 2) * fs->header.cluster_size; }
 
 uint8_t fat_get_dir_entry_of_path(struct fat_fs_struct *fs, const char* path, struct fat_dir_entry_struct *dir_entry) {
   if(!fs || !path || path[0] == '\0' || !dir_entry) {
@@ -269,7 +308,7 @@ uint8_t fat_read_byte(struct fat_file_struct *fd) {
     return 0xff; }
 
   uint16_t cluster_size = fd->fs->header.cluster_size;
-  cluster_t cluster_num = fd->pos_cluster;
+  uint32_t cluster_num = fd->pos_cluster;
   uint16_t first_cluster_offset = (uint16_t)(fd->pos & (cluster_size - 1));
 
   if(!cluster_num) {
@@ -286,7 +325,7 @@ uint8_t fat_read_byte(struct fat_file_struct *fd) {
         if(!cluster_num) {
           return 0xff; } } } }
 
-  offset_t cluster_offset = fat_cluster_offset(fd->fs, cluster_num) + first_cluster_offset;
+  uint64_t cluster_offset = fat_cluster_offset(fd->fs, cluster_num) + first_cluster_offset;
 
   uint8_t buffer[1];
   if(!fd->fs->partition->device_read(cluster_offset, buffer, 1)) {
@@ -337,7 +376,7 @@ uint8_t fat_read_dir(struct fat_dir_struct *dd, struct fat_dir_entry_struct *dir
   struct fat_fs_struct* fs = dd->fs;
   const struct fat_header_struct* header = &fs->header;
   uint16_t cluster_size = header->cluster_size;
-  cluster_t cluster_num = dd->entry_cluster;
+  uint32_t cluster_num = dd->entry_cluster;
   uint16_t cluster_offset = dd->entry_offset;
   struct fat_read_dir_callback_arg arg;
 
@@ -358,7 +397,7 @@ uint8_t fat_read_dir(struct fat_dir_struct *dd, struct fat_dir_entry_struct *dir
   uint8_t buffer[32];
   while(!arg.finished) {
     uint16_t cluster_left = cluster_size - cluster_offset;
-    offset_t pos = cluster_offset;
+    uint64_t pos = cluster_offset;
     if(cluster_num == 0) {
       pos += header->root_dir_offset;
     } else {
@@ -392,7 +431,7 @@ uint8_t fat_reset_dir(struct fat_dir_struct *dd) {
   dd->entry_offset = 0;
   return 1; }
 
-uint8_t fat_dir_entry_read_callback(uint8_t *buffer, offset_t offset, void *p) {
+uint8_t fat_dir_entry_read_callback(uint8_t *buffer, uint64_t offset, void *p) {
   struct fat_read_dir_callback_arg *arg = p;
   struct fat_dir_entry_struct *dir_entry = arg->dir_entry;
 
@@ -439,7 +478,7 @@ uint8_t fat_dir_entry_read_callback(uint8_t *buffer, offset_t offset, void *p) {
 
   dir_entry->attributes = buffer[11];
   dir_entry->cluster = read16(&buffer[26]);
-  dir_entry->cluster |= ((cluster_t) read16(&buffer[20])) << 16;
+  dir_entry->cluster |= ((uint32_t) read16(&buffer[20])) << 16;
   dir_entry->file_size = read32(&buffer[28]);
 
   arg->finished = 1;

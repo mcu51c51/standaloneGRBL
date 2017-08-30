@@ -1,6 +1,6 @@
 #include "grbl.h"
 
-static void report_util_line_feed() { printPgmString(PSTR("\n")); }
+#define report_util_line_feed() printPgmString(PSTR("\r\n"))
 
 void report_status_message(uint8_t status_code) {
   if (status_code == STATUS_OK) {
@@ -14,7 +14,7 @@ void report_build_info() {
   serial_write('[');
   printPgmString(PSTR(GRBL_VERSION "." GRBL_VERSION_BUILD));
   serial_write(',');
-  printInteger(RX_BUFFER_SIZE);
+  print_uint32_base10(RX_BUFFER_SIZE);
   serial_write(']');
   report_util_line_feed(); }
 
@@ -45,5 +45,7 @@ void report_grbl_settings() {
   printFloat(settings.junction_deviation, 3);
   serial_write(',');
   print_uint8_base10(bit_istrue(settings.flags,BITFLAG_HOMING_ENABLE));
+  serial_write(',');
+  print_uint8_base10(bit_istrue(settings.flags,BITFLAG_XY_HOME_PIN_AS_ST_ENABLE));
   serial_write('}');
   report_util_line_feed(); }

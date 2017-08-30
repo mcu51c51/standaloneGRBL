@@ -24,7 +24,6 @@
 #define STEP_CONTROL_NORMAL_OP            0
 #define STEP_CONTROL_END_MOTION           bit(0)
 #define STEP_CONTROL_EXECUTE_HOLD         bit(1)
-#define STEP_CONTROL_EXECUTE_SYS_MOTION   bit(2)
 #define STEP_CONTROL_UPDATE_SPINDLE_PWM   bit(3)
 
 typedef struct {
@@ -59,6 +58,5 @@ void buttons_check();
 uint8_t adc_read(uint8_t pin);
 uint8_t system_execute_line(char *line);
 void system_set_exec_state_flag(uint8_t mask);
-void system_clear_exec_state_flag(uint8_t mask);
 
 #endif

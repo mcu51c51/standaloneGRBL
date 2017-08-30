@@ -11,12 +11,10 @@
 #define PREP_FLAG_HOLD_PARTIAL_BLOCK bit(1)
 #define PREP_FLAG_DECEL_OVERRIDE bit(2)
 
-#ifdef ADAPTIVE_MULTI_AXIS_STEP_SMOOTHING
-  #define MAX_AMASS_LEVEL 3
-  #define AMASS_LEVEL1 (F_CPU/8000)
-  #define AMASS_LEVEL2 (F_CPU/4000)
-  #define AMASS_LEVEL3 (F_CPU/2000)
-#endif
+#define MAX_AMASS_LEVEL 3
+#define AMASS_LEVEL1 (F_CPU/8000)
+#define AMASS_LEVEL2 (F_CPU/4000)
+#define AMASS_LEVEL3 (F_CPU/2000)
 
 typedef struct {
   uint32_t steps[N_AXIS];
@@ -84,6 +82,11 @@ typedef struct {
 static st_prep_t prep;
 
 void st_wake_up() {
+  if (bit_istrue(settings.flags,BITFLAG_XY_HOME_PIN_AS_ST_ENABLE)) {
+    if ((bit_istrue(settings.flags,BITFLAG_INVERT_LIMIT_PINS) ? bit_isfalse(STEPPERS_DISABLE_PORT,(1<<STEPPERS_DISABLE_BIT)):bit_istrue(STEPPERS_DISABLE_PORT,(1<<STEPPERS_DISABLE_BIT)))) {
+      if (bit_istrue(settings.flags,BITFLAG_INVERT_LIMIT_PINS)) { STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT); }
+      else { STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT); }
+      delay_ms(200); } }
   st.step_outbits = step_port_invert_mask;
 
   TIMSK1 |= (1<<OCIE1A); }
@@ -131,9 +134,12 @@ ISR(TIMER1_COMPA_vect) {
       if (sys.state == STATE_CYCLE && sys.spindle_speed != SPINDLE_PWM_MIN_VALUE) {
         spindle_set_speed(st.exec_segment->spindle_pwm); }
     } else {
-      st_go_idle();
+      TIMSK1 &= ~(1<<OCIE1A);
+      TCCR1B = (TCCR1B & ~((1<<CS12) | (1<<CS11))) | (1<<CS10);
+
       if (sys.spindle_speed > SPINDLE_PWM_MIN_VALUE) { spindle_set_speed(SPINDLE_PWM_OFF_VALUE); }
       system_set_exec_state_flag(EXEC_CYCLE_STOP);
+      busy = 0;
       return; } }
 
   st.step_outbits = 0;
@@ -199,15 +205,14 @@ void st_reset() {
   STEPPER_PORT = (STEPPER_PORT & ~DIRECTION_MASK) | dir_port_invert_mask; }
 
 void stepper_init() {
-  STEPPER_DDR |= STEP_MASK;
-  STEPPER_DDR |= DIRECTION_MASK;
+  STEPPER_DDR |= STEP_MASK | DIRECTION_MASK;
 
   TCCR1B &= ~(1<<WGM13);
   TCCR1B |=  (1<<WGM12);
   TCCR1A &= ~((1<<WGM11) | (1<<WGM10));
   TCCR1A &= ~((1<<COM1A1) | (1<<COM1A0) | (1<<COM1B1) | (1<<COM1B0));
-  //TCCR1B = (TCCR1B & ~((1<<CS12) | (1<<CS11))) | (1<<CS10);
-  //TIMSK1 &= ~(1<<OCIE1A);
+  TCCR1B = (TCCR1B & ~((1<<CS12) | (1<<CS11))) | (1<<CS10);
+  TIMSK1 &= ~(1<<OCIE1A);
 
   TIMSK0 &= ~((1<<OCIE0B) | (1<<OCIE0A) | (1<<TOIE0));
   TCCR0A = 0;
@@ -232,8 +237,7 @@ void st_prep_buffer() {
 
     if (pl_block == NULL) {
 
-      if (sys.step_control & STEP_CONTROL_EXECUTE_SYS_MOTION) { pl_block = plan_get_system_motion_block(); }
-      else { pl_block = plan_get_current_block(); }
+      pl_block = plan_get_current_block();
       if (pl_block == NULL) { return; }
 
       if (prep.recalculate_flag & PREP_FLAG_RECALCULATE) {
@@ -267,19 +271,19 @@ void st_prep_buffer() {
         } else {
           prep.current_speed = sqrt(pl_block->entry_speed_sqr); } }
 
-      prep.mm_complete = 0.0;
-      float inv_2_accel = 0.5/pl_block->acceleration;
+      prep.mm_complete = 0;
+      float inv_2_accel = .5/pl_block->acceleration;
 
       if (sys.step_control & STEP_CONTROL_EXECUTE_HOLD) {
 
         prep.ramp_type = RAMP_DECEL;
 
         float decel_dist = pl_block->millimeters - inv_2_accel*pl_block->entry_speed_sqr;
-        if (decel_dist < 0.0) {
+        if (decel_dist < 0) {
           prep.exit_speed = sqrt(pl_block->entry_speed_sqr-2*pl_block->acceleration*pl_block->millimeters);
         } else {
           prep.mm_complete = decel_dist;
-          prep.exit_speed = 0.0; }
+          prep.exit_speed = 0; }
 
       } else {
 
@@ -288,19 +292,16 @@ void st_prep_buffer() {
 
         float exit_speed_sqr;
         float nominal_speed;
-        if (sys.step_control & STEP_CONTROL_EXECUTE_SYS_MOTION) {
-          prep.exit_speed = exit_speed_sqr = 0.0;
-        } else {
-          exit_speed_sqr = plan_get_exec_block_exit_speed_sqr();
-          prep.exit_speed = sqrt(exit_speed_sqr); }
+        exit_speed_sqr = plan_get_exec_block_exit_speed_sqr();
+        prep.exit_speed = sqrt(exit_speed_sqr);
 
         nominal_speed = plan_compute_profile_nominal_speed(pl_block);
         float nominal_speed_sqr = nominal_speed*nominal_speed;
-        float intersect_distance = 0.5*(pl_block->millimeters+inv_2_accel*(pl_block->entry_speed_sqr-exit_speed_sqr));
+        float intersect_distance = .5*(pl_block->millimeters+inv_2_accel*(pl_block->entry_speed_sqr-exit_speed_sqr));
         if (pl_block->entry_speed_sqr > nominal_speed_sqr) {
 
           prep.accelerate_until = pl_block->millimeters - inv_2_accel*(pl_block->entry_speed_sqr-nominal_speed_sqr);
-          if (prep.accelerate_until <= 0.0) {
+          if (prep.accelerate_until <= 0) {
 
             prep.ramp_type = RAMP_DECEL;
             //prep.decelerate_after = pl_block->millimeters;
@@ -315,7 +316,7 @@ void st_prep_buffer() {
             prep.maximum_speed = nominal_speed;
             prep.ramp_type = RAMP_DECEL_OVERRIDE; }
 
-        } else if (intersect_distance > 0.0) {
+        } else if (intersect_distance > 0) {
 
           if (intersect_distance < pl_block->millimeters) {
             prep.decelerate_after = inv_2_accel*(nominal_speed_sqr-exit_speed_sqr);
@@ -328,7 +329,7 @@ void st_prep_buffer() {
             } else {
               prep.accelerate_until = intersect_distance;
               prep.decelerate_after = intersect_distance;
-              prep.maximum_speed = sqrt(2.0*pl_block->acceleration*intersect_distance+exit_speed_sqr); }
+              prep.maximum_speed = sqrt(2*pl_block->acceleration*intersect_distance+exit_speed_sqr); }
           } else {
             prep.ramp_type = RAMP_DECEL;
             //prep.decelerate_after = pl_block->millimeters;
@@ -337,8 +338,8 @@ void st_prep_buffer() {
 
         } else {
 
-          prep.accelerate_until = 0.0;
-          //prep.decelerate_after = 0.0;
+          prep.accelerate_until = 0;
+          //prep.decelerate_after = 0;
           prep.maximum_speed = prep.exit_speed; } }
 
       bit_true(sys.step_control, STEP_CONTROL_UPDATE_SPINDLE_PWM);
@@ -349,13 +350,13 @@ void st_prep_buffer() {
     prep_segment->st_block_index = prep.st_block_index;
 
     float dt_max = DT_SEGMENT;
-    float dt = 0.0;
+    float dt = 0;
     float time_var = dt_max;
     float mm_var;
     float speed_var;
     float mm_remaining = pl_block->millimeters;
     float minimum_mm = mm_remaining-prep.req_mm_increment;
-    if (minimum_mm < 0.0) { minimum_mm = 0.0; }
+    if (minimum_mm < 0) { minimum_mm = 0; }
 
     do {
       switch (prep.ramp_type) {
@@ -363,16 +364,16 @@ void st_prep_buffer() {
           speed_var = pl_block->acceleration*time_var;
           if (prep.current_speed-prep.maximum_speed <= speed_var) {
             mm_remaining = prep.accelerate_until;
-            time_var = 2.0*(pl_block->millimeters-mm_remaining)/(prep.current_speed+prep.maximum_speed);
+            time_var = 2*(pl_block->millimeters-mm_remaining)/(prep.current_speed+prep.maximum_speed);
             prep.ramp_type = RAMP_CRUISE;
             prep.current_speed = prep.maximum_speed;
           } else {
-            mm_remaining -= time_var*(prep.current_speed - 0.5*speed_var);
+            mm_remaining -= time_var*(prep.current_speed - .5*speed_var);
             prep.current_speed -= speed_var; }
           break;
         case RAMP_ACCEL:
           speed_var = pl_block->acceleration*time_var;
-          mm_remaining -= time_var*(prep.current_speed + 0.5*speed_var);
+          mm_remaining -= time_var*(prep.current_speed + .5*speed_var);
           if (mm_remaining < prep.accelerate_until) {
             mm_remaining = prep.accelerate_until;
             time_var = 2.0*(pl_block->millimeters-mm_remaining)/(prep.current_speed+prep.maximum_speed);
@@ -394,12 +395,12 @@ void st_prep_buffer() {
         default:
           speed_var = pl_block->acceleration*time_var;
           if (prep.current_speed > speed_var) {
-            mm_var = mm_remaining - time_var*(prep.current_speed - 0.5*speed_var);
+            mm_var = mm_remaining - time_var*(prep.current_speed - .5*speed_var);
             if (mm_var > prep.mm_complete) {
               mm_remaining = mm_var;
               prep.current_speed -= speed_var;
               break; } }
-          time_var = 2.0*(mm_remaining-prep.mm_complete)/(prep.current_speed+prep.exit_speed);
+          time_var = 2*(mm_remaining-prep.mm_complete)/(prep.current_speed+prep.exit_speed);
           mm_remaining = prep.mm_complete;
           prep.current_speed = prep.exit_speed; }
       dt += time_var;
@@ -464,13 +465,9 @@ void st_prep_buffer() {
     prep.dt_remainder = (n_steps_remaining - step_dist_remaining)*inv_rate;
 
     if (mm_remaining == prep.mm_complete) {
-      if (mm_remaining > 0.0) {
+      if (mm_remaining > 0) {
         bit_true(sys.step_control,STEP_CONTROL_END_MOTION);
         return;
       } else {
-        if (sys.step_control & STEP_CONTROL_EXECUTE_SYS_MOTION) {
-          bit_true(sys.step_control,STEP_CONTROL_END_MOTION);
-          return;
-        }
         pl_block = NULL;
         plan_discard_current_block(); } } } }

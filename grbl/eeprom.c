@@ -1,18 +1,10 @@
-#include <avr/io.h>
-#include <avr/interrupt.h>
-
-#ifndef EEPE
-  #define EEPE  EEWE
-  #define EEMPE EEMWE
-#endif
+#include "grbl.h"
 
 #define EEPM1 5
 #define EEPM0 4
 
-#define EEPROM_IGNORE_SELFPROG
-
 unsigned char eeprom_get_char(unsigned int addr) {
-  do {} while(EECR & (1<<EEPE));
+  while(EECR & (1<<EEPE)) {}
   EEAR = addr;
   EECR = (1<<EERE);
   return EEDR; }
@@ -23,9 +15,9 @@ void eeprom_put_char(unsigned int addr, unsigned char new_value) {
 
   cli();
 
-  do {} while(EECR & (1<<EEPE));
+  while(EECR & (1<<EEPE)) {}
   #ifndef EEPROM_IGNORE_SELFPROG
-    do {} while(SPMCSR & (1<<SELFPRGEN));
+    while(SPMCSR & (1<<SELFPRGEN)) {}
   #endif
 
   EEAR = addr;

@@ -14,7 +14,6 @@
 #define LCD_CLR               0
 #define LCD_ENTRY_MODE        2
 #define LCD_ENTRY_INC         1
-#define LCD_FUNCTION          5
 #define LCD_DDRAM             7
 #define LCD_BUSY              7
 
@@ -25,15 +24,14 @@
 
 #define LCD_MODE_DEFAULT         ((1<<LCD_ENTRY_MODE)|(1<<LCD_ENTRY_INC))
 
+#define lcd_puts_P(__s) lcd_puts_p(PSTR(__s))
+
 extern void lcd_init();
 extern void lcd_clrscr(void);
 extern void lcd_gotoxy(uint8_t x, uint8_t y);
 extern void lcd_putc(char c);
-//extern void lcd_puts(const char *s);
 extern void lcd_puts_p(const char *progmem_s);
 extern void lcd_command(uint8_t cmd);
 extern void lcd_data(uint8_t data);
-
-#define lcd_puts_P(__s) lcd_puts_p(PSTR(__s))
 
 #endif

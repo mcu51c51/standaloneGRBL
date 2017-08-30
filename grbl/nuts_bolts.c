@@ -1,41 +1,5 @@
 #include "grbl.h"
 
-uint8_t read_int(char *line, uint8_t *char_counter, int32_t *int_ptr) {
-  char *ptr = line + *char_counter;
-  unsigned char c;
-
-  c = *ptr++;
-
-  bool isnegative = 0;
-  if (c == '-') {
-    isnegative = 1;
-    c = *ptr++; }
-
-  uint32_t intval = 0;
-  uint8_t ndigit = 0;
-
-  while(1) {
-    c -= '0';
-    if (c <= 9) {
-      ndigit++;
-      intval = (((intval << 2) + intval) << 1) + c;
-    } else if (c == (('.'-'0') & 0xff)) {
-      return(0);
-    } else {
-      break; }
-    c = *ptr++; }
-
-  if (!ndigit) { return(0); }
-
-  if (isnegative) {
-    *int_ptr = -intval;
-  } else {
-    *int_ptr = intval; }
-
-  *char_counter = ptr - line - 1;
-
-  return(1); }
-
 uint8_t read_float(char *line, uint8_t *char_counter, float *float_ptr) {
   char *ptr = line + *char_counter;
   unsigned char c;

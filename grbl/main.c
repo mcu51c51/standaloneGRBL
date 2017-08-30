@@ -16,7 +16,14 @@ int main(void) {
   settings_init();
   stepper_init();
   spindle_init();
-  limits_init();
+
+  if (bit_istrue(settings.flags,BITFLAG_XY_HOME_PIN_AS_ST_ENABLE)) {
+    STEPPERS_DISABLE_DDR |= (1<<STEPPERS_DISABLE_BIT);
+    if (bit_isfalse(settings.flags,BITFLAG_INVERT_LIMIT_PINS)) { STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT); }
+    else { STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT); }
+  } else {
+    LIMIT_DDR &= ~(1<<XY_LIMIT_BIT);
+    LIMIT_PORT |= (1<<XY_LIMIT_BIT); }
 
   OCR2A = 255;
   TIMSK2 |= (1 << OCIE2A);

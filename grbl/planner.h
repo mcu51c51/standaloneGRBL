@@ -1,12 +1,12 @@
 #ifndef planner_h
 #define planner_h
 
-#define PLAN_OK 1
-#define PLAN_EMPTY_BLOCK 0
+#define BLOCK_BUFFER_SIZE 15
+
+#define MINIMUM_JUNCTION_SPEED 0
+#define MINIMUM_FEED_RATE 1
 
 #define PL_COND_FLAG_RAPID_MOTION      bit(0)
-#define PL_COND_FLAG_SYSTEM_MOTION     bit(1)
-#define PL_COND_FLAG_PLUNGE_MOTION     bit(2)
 
 typedef struct {
   uint32_t steps[N_AXIS];
@@ -27,8 +27,6 @@ typedef struct {
   int32_t xyz[N_AXIS];
   float gc_pos[N_AXIS];
   uint8_t spindle_speed;
-  uint16_t dwell;
-  bool laserOn;
   float feed_rate;
   uint8_t condition;
   uint8_t units;
@@ -37,11 +35,9 @@ typedef struct {
 extern plan_line_data_t pl_data;
 
 void plan_reset();
-void plan_reset_buffer();
 uint8_t plan_buffer_line();
 void plan_discard_current_block();
 
-plan_block_t *plan_get_system_motion_block();
 plan_block_t *plan_get_current_block();
 
 uint8_t plan_next_block_index(uint8_t block_index);

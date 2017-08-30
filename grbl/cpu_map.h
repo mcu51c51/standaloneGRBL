@@ -1,9 +1,6 @@
 #ifndef cpu_map_h
 #define cpu_map_h
 
-#define SERIAL_RX         USART_RX_vect
-#define SERIAL_UDRE       USART_UDRE_vect
-
 #define STEPPER_DDR       DDRD
 #define STEPPER_PORT      PORTD
 #define X_STEP_BIT        5
@@ -13,16 +10,25 @@
 #define STEP_MASK         ((1<<X_STEP_BIT)|(1<<Y_STEP_BIT))
 #define DIRECTION_MASK    ((1<<X_DIRECTION_BIT)|(1<<Y_DIRECTION_BIT))
 
+#define STEPPERS_DISABLE_DDR    DDRB
+#define STEPPERS_DISABLE_PORT   PORTB
+#define STEPPERS_DISABLE_BIT    1
+
+#define LCD_RS_DDR       DDRD
 #define LCD_RS_PORT      PORTD
 #define LCD_RS_BIT       2
 
+#define LCD_RW_DDR       DDRB
 #define LCD_RW_PORT      PORTB
 #define LCD_RW_BIT       0
 
+#define LCD_ENABLE_DDR   DDRC
 #define LCD_ENABLE_PORT  PORTC
 #define LCD_ENABLE_BIT   4
 
+#define LCD_DATA_DDR     DDRC
 #define LCD_DATA_PORT    PORTC
+#define LCD_DATA_PIN     PINC
 
 #define LIMIT_DDR         DDRB
 #define LIMIT_PIN         PINB
@@ -40,7 +46,7 @@
 #define SPINDLE_PWM_BIT   3
 
 #define SPINDLE_PWM_MAX_VALUE     255
-#define SPINDLE_PWM_MIN_VALUE     1
+#define SPINDLE_PWM_MIN_VALUE     5
 #define SPINDLE_PWM_OFF_VALUE     0
 #define SPINDLE_TCCRA_REGISTER    TCCR2A
 #define SPINDLE_TCCRB_REGISTER    TCCR2B

@@ -1,6 +1,8 @@
 #ifndef protocol_h
 #define protocol_h
 
+#define LINE_BUFFER_SIZE 30
+
 void protocol_main_loop();
 void protocol_buffer_synchronize();
 void protocol_execute_realtime();

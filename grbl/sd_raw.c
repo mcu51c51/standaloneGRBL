@@ -1,6 +1,4 @@
-#include <string.h>
-#include <avr/io.h>
-#include "sd_raw.h"
+#include "grbl.h"
 
 #define CMD_GO_IDLE_STATE 0x00
 #define CMD_SEND_OP_COND 0x01
@@ -19,7 +17,7 @@
 #define SD_RAW_SPEC_SDHC 2
 
 static uint8_t raw_block[512];
-static offset_t raw_block_address;
+static uint64_t raw_block_address;
 
 static uint8_t sd_raw_card_type;
 
@@ -56,7 +54,6 @@ uint8_t sd_raw_init() {
       unselect_card();
       return 0; } }
 
-#if SD_RAW_SDHC
   response = sd_raw_send_command(CMD_SEND_IF_COND, 0x100 | 0xaa);
   if((response & (1 << R1_ILL_COMMAND)) == 0) {
     sd_raw_rec_byte();
@@ -66,9 +63,7 @@ uint8_t sd_raw_init() {
     if(sd_raw_rec_byte() != 0xaa) {
       return 0; }
     sd_raw_card_type |= (1 << SD_RAW_SPEC_2);
-  } else
-#endif
-  {
+  } else {
     sd_raw_send_command(CMD_APP, 0);
     response = sd_raw_send_command(CMD_SD_SEND_OP_COND, 0);
     if((response & (1 << R1_ILL_COMMAND)) == 0) {
@@ -77,10 +72,8 @@ uint8_t sd_raw_init() {
   for(uint16_t i = 0; ; ++i) {
     if(sd_raw_card_type & ((1 << SD_RAW_SPEC_1) | (1 << SD_RAW_SPEC_2))) {
       uint32_t arg = 0;
-#if SD_RAW_SDHC
       if(sd_raw_card_type & (1 << SD_RAW_SPEC_2)) {
         arg = 0x40000000; }
-#endif
       sd_raw_send_command(CMD_APP, 0);
       response = sd_raw_send_command(CMD_SD_SEND_OP_COND, arg);
     } else {
@@ -93,7 +86,6 @@ uint8_t sd_raw_init() {
       unselect_card();
       return 0; } }
 
-#if SD_RAW_SDHC
   if(sd_raw_card_type & (1 << SD_RAW_SPEC_2)) {
     if(sd_raw_send_command(CMD_READ_OCR, 0)) {
       unselect_card();
@@ -104,7 +96,6 @@ uint8_t sd_raw_init() {
     sd_raw_rec_byte();
     sd_raw_rec_byte();
     sd_raw_rec_byte(); }
-#endif
 
   if(sd_raw_send_command(CMD_SET_BLOCKLEN, 512)) {
     unselect_card();
@@ -115,7 +106,7 @@ uint8_t sd_raw_init() {
   SPCR &= ~((1<<SPR1)|(1<<SPR0));
   SPSR |= (1<<SPI2X);
 
-  raw_block_address = (offset_t) - 1;
+  raw_block_address = (uint64_t) - 1;
   if(!sd_raw_read(0, raw_block, sizeof(raw_block))) {
     return 0; }
 
@@ -161,8 +152,8 @@ uint8_t sd_raw_send_command(uint8_t command, uint32_t arg) {
 
   return response; }
 
-uint8_t sd_raw_read(offset_t offset, uint8_t *buffer, uintptr_t length) {
-  offset_t block_address;
+uint8_t sd_raw_read(uint64_t offset, uint8_t *buffer, uintptr_t length) {
+  uint64_t block_address;
   uint16_t block_offset;
   uint16_t read_length;
   while(length > 0) {
@@ -174,12 +165,7 @@ uint8_t sd_raw_read(offset_t offset, uint8_t *buffer, uintptr_t length) {
 
     if(block_address != raw_block_address) {
       select_card();
-#if SD_RAW_SDHC
-      if(sd_raw_send_command(CMD_READ_SINGLE_BLOCK, (sd_raw_card_type & (1 << SD_RAW_SPEC_SDHC) ? block_address / 512 : block_address)))
-#else
-      if(sd_raw_send_command(CMD_READ_SINGLE_BLOCK, block_address))
-#endif
-      {
+      if(sd_raw_send_command(CMD_READ_SINGLE_BLOCK, (sd_raw_card_type & (1 << SD_RAW_SPEC_SDHC) ? block_address / 512 : block_address))) {
         unselect_card();
         return 0; }
 
@@ -207,7 +193,7 @@ uint8_t sd_raw_read(offset_t offset, uint8_t *buffer, uintptr_t length) {
 
   return 1; }
 
-uint8_t sd_raw_read_interval(offset_t offset, uint8_t *buffer, uintptr_t interval, uintptr_t length, sd_raw_read_interval_handler_t callback, void *p) {
+uint8_t sd_raw_read_interval(uint64_t offset, uint8_t *buffer, uintptr_t interval, uintptr_t length, sd_raw_read_interval_handler_t callback, void *p) {
   if(!buffer || interval == 0 || length < interval || !callback) {
     return 0; }
 

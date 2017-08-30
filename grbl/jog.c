@@ -1,6 +1,6 @@
 #include "grbl.h"
 
-void jog_execute_line(uint8_t i) {
+void jog_execute(uint8_t i) {
   sys.f_override = 100;
   pl_data.spindle_speed = SPINDLE_PWM_OFF_VALUE;
   pl_data.condition = 0;

@@ -1,8 +1,4 @@
 #include "grbl.h"
-#include "lcd.h"
-
-#define DDR(x) (*(&x - 1))
-#define PIN(x) (*(&x - 2))
 
 #define lcd_e_delay()   _delay_us(LCD_DELAY_ENABLE_PULSE)
 #define lcd_e_high()    LCD_ENABLE_PORT |=  _BV(LCD_ENABLE_BIT);
@@ -15,9 +11,8 @@
 
 #define LCD_FUNCTION_DEFAULT    LCD_FUNCTION_4BIT_2LINES 
 
-static void toggle_e(void);
-
 #define delay(us) _delay_us(us)
+
 uint8_t counter = 0;
 
 static void toggle_e(void) {
@@ -34,7 +29,7 @@ static void lcd_write(uint8_t data, uint8_t rs) {
      lcd_rs_low(); }
   lcd_rw_low();
 
-  DDR(LCD_DATA_PORT) |= 0x0F;
+  LCD_DATA_DDR |= 0x0F;
 
   dataBits = LCD_DATA_PORT & 0xF0;
   LCD_DATA_PORT = dataBits |((data>>4)&0x0F);
@@ -51,18 +46,18 @@ static uint8_t lcd_read() {
   lcd_rs_low();
   lcd_rw_high();
 
-  DDR(LCD_DATA_PORT) &= 0xF0;
+  LCD_DATA_DDR &= 0xF0;
 
   lcd_e_high();
   lcd_e_delay();
-  data = PIN(LCD_DATA_PORT) << 4;
+  data = LCD_DATA_PIN << 4;
   lcd_e_low();
 
   lcd_e_delay();
 
   lcd_e_high();
   lcd_e_delay();
-  data |= PIN(LCD_DATA_PORT)&0x0F;
+  data |= LCD_DATA_PIN & 0x0F;
   lcd_e_low();
   return data; }
 
@@ -90,11 +85,6 @@ void lcd_clrscr(void) {
 void lcd_putc(char c) {
   lcd_waitbusy();
   lcd_write(c, 1); }
-
-/*void lcd_puts(const char *s) {
-  register char c;
-  while ((c = *s++)) {
-    lcd_putc(c); } }*/
 
 void lcd_puts_p(const char *progmem_s) {
   register char c;
@@ -218,10 +208,10 @@ void lcd_error(uint8_t status_code) {
       break; } }
 
 void lcd_init() {
-  DDR(LCD_DATA_PORT)   |= 0x0F;
-  DDR(LCD_RS_PORT)     |= _BV(LCD_RS_BIT);
-  DDR(LCD_RW_PORT)     |= _BV(LCD_RW_BIT);
-  DDR(LCD_ENABLE_PORT) |= _BV(LCD_ENABLE_BIT);
+  LCD_DATA_DDR |= 0x0F;
+  LCD_RS_DDR |= _BV(LCD_RS_BIT);
+  LCD_RW_DDR |= _BV(LCD_RW_BIT);
+  LCD_ENABLE_DDR |= _BV(LCD_ENABLE_BIT);
   delay(LCD_DELAY_BOOTUP);
 
   LCD_DATA_PORT |= _BV(1);

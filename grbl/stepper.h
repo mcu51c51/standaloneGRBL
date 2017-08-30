@@ -1,6 +1,11 @@
 #ifndef stepper_h
 #define stepper_h
 
+#define SEGMENT_BUFFER_SIZE 6
+
+#define ADAPTIVE_MULTI_AXIS_STEP_SMOOTHING
+#define ACCELERATION_TICKS_PER_SECOND 100
+
 void stepper_init();
 void st_wake_up();
 void st_go_idle();

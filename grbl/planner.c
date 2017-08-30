@@ -1,5 +1,8 @@
 #include "grbl.h"
 
+#define PLAN_OK 1
+#define PLAN_EMPTY_BLOCK 0
+
 static plan_block_t block_buffer[BLOCK_BUFFER_SIZE];
 static uint8_t block_buffer_tail;
 static uint8_t block_buffer_head;
@@ -69,9 +72,6 @@ static void planner_recalculate() {
 
 void plan_reset() {
   memset(&pl, 0, sizeof(planner_t));
-  plan_reset_buffer(); }
-
-void plan_reset_buffer() {
   block_buffer_tail = 0;
   block_buffer_head = 0;
   next_buffer_head = 1;
@@ -83,16 +83,13 @@ void plan_discard_current_block() {
     if (block_buffer_tail == block_buffer_planned) { block_buffer_planned = block_index; }
     block_buffer_tail = block_index; } }
 
-plan_block_t *plan_get_system_motion_block() {
-  return(&block_buffer[block_buffer_head]); }
-
 plan_block_t *plan_get_current_block() {
   if (block_buffer_head == block_buffer_tail) { return(NULL); }
   return(&block_buffer[block_buffer_tail]); }
 
 float plan_get_exec_block_exit_speed_sqr() {
   uint8_t block_index = plan_next_block_index(block_buffer_tail);
-  if (block_index == block_buffer_head) { return(0.0); }
+  if (block_index == block_buffer_head) { return(0); }
   return(block_buffer[block_index].entry_speed_sqr); }
 
 uint8_t plan_check_full_buffer() {
@@ -102,7 +99,7 @@ uint8_t plan_check_full_buffer() {
 float plan_compute_profile_nominal_speed(plan_block_t *block) {
   float nominal_speed = block->programmed_rate;
   if (!(block->condition & PL_COND_FLAG_RAPID_MOTION)) {
-    nominal_speed *= (0.01*sys.f_override);
+    nominal_speed *= (.01*sys.f_override);
     if (nominal_speed > block->rapid_rate) { nominal_speed = block->rapid_rate; } }
   if (nominal_speed > MINIMUM_FEED_RATE) { return(nominal_speed); }
   return(MINIMUM_FEED_RATE); }
@@ -133,31 +130,28 @@ uint8_t plan_buffer_line() {
   memset(block, 0, sizeof(plan_block_t));
   block->condition = pl_data.condition;
 
-  int32_t target_steps[N_AXIS], position_steps[N_AXIS];
+  int32_t position_steps[N_AXIS];
   float unit_vec[N_AXIS], delta_mm;
   uint8_t idx;
 
   memcpy(position_steps, pl.position, sizeof(pl.position));
 
   #ifdef COREXY
-    target_steps[A_MOTOR] = pl_data.xyz[X_AXIS];
-    target_steps[B_MOTOR] = pl_data.xyz[Y_AXIS];
-    block->steps[A_MOTOR] = labs((target_steps[X_AXIS]-position_steps[X_AXIS]) + (target_steps[Y_AXIS]-position_steps[Y_AXIS]));
-    block->steps[B_MOTOR] = labs((target_steps[X_AXIS]-position_steps[X_AXIS]) - (target_steps[Y_AXIS]-position_steps[Y_AXIS]));
+    block->steps[A_MOTOR] = labs((pl_data.xyz[X_AXIS]-position_steps[X_AXIS]) + (pl_data.xyz[Y_AXIS]-position_steps[Y_AXIS]));
+    block->steps[B_MOTOR] = labs((pl_data.xyz[X_AXIS]-position_steps[X_AXIS]) - (pl_data.xyz[Y_AXIS]-position_steps[Y_AXIS]));
   #endif
 
   for (idx=0; idx<N_AXIS; idx++) {
     #ifdef COREXY
       block->step_event_count = max(block->step_event_count, block->steps[idx]);
       if (idx == A_MOTOR) {
-        delta_mm = (target_steps[X_AXIS]-position_steps[X_AXIS] + target_steps[Y_AXIS]-position_steps[Y_AXIS])/settings.steps_per_mm[idx];
+        delta_mm = (pl_data.xyz[X_AXIS]-position_steps[X_AXIS] + pl_data.xyz[Y_AXIS]-position_steps[Y_AXIS])/settings.steps_per_mm[idx];
       } else {
-        delta_mm = (target_steps[X_AXIS]-position_steps[X_AXIS] - target_steps[Y_AXIS]+position_steps[Y_AXIS])/settings.steps_per_mm[idx]; }
+        delta_mm = (pl_data.xyz[X_AXIS]-position_steps[X_AXIS] - pl_data.xyz[Y_AXIS]+position_steps[Y_AXIS])/settings.steps_per_mm[idx]; }
     #else
-      target_steps[idx] = pl_data.xyz[idx];
-      block->steps[idx] = labs(target_steps[idx]-position_steps[idx]);
+      block->steps[idx] = labs(pl_data.xyz[idx]-position_steps[idx]);
       block->step_event_count = max(block->step_event_count, block->steps[idx]);
-      delta_mm = (target_steps[idx] - position_steps[idx])/settings.steps_per_mm[idx];
+      delta_mm = (pl_data.xyz[idx] - position_steps[idx])/settings.steps_per_mm[idx];
     #endif
     unit_vec[idx] = delta_mm;
 
@@ -173,45 +167,44 @@ uint8_t plan_buffer_line() {
     block->programmed_rate = block->rapid_rate;
   } else {
     block->programmed_rate = pl_data.feed_rate;
-    if (pl_data.laserOn) { block->spindle_speed = pl_data.spindle_speed; }
+    block->spindle_speed = pl_data.spindle_speed;
   }
 
-  if ((block_buffer_head == block_buffer_tail) || (block->condition & PL_COND_FLAG_SYSTEM_MOTION)) {
+  if (block_buffer_head == block_buffer_tail) {
 
-    block->entry_speed_sqr = 0.0;
-    block->max_junction_speed_sqr = 0.0;
+    block->entry_speed_sqr = 0;
+    block->max_junction_speed_sqr = 0;
 
   } else {
 
     float junction_unit_vec[N_AXIS];
-    float junction_cos_theta = 0.0;
+    float junction_cos_theta = 0;
     for (idx=0; idx<N_AXIS; idx++) {
       junction_cos_theta -= pl.previous_unit_vec[idx]*unit_vec[idx];
       junction_unit_vec[idx] = unit_vec[idx]-pl.previous_unit_vec[idx]; }
 
-    if (junction_cos_theta > 0.999999) {
+    if (junction_cos_theta > .999999) {
       block->max_junction_speed_sqr = MINIMUM_JUNCTION_SPEED*MINIMUM_JUNCTION_SPEED;
     } else {
-      if (junction_cos_theta < -0.999999) {
+      if (junction_cos_theta < -.999999) {
         block->max_junction_speed_sqr = SOME_LARGE_VALUE;
       } else {
         convert_delta_vector_to_unit_vector(junction_unit_vec);
         float junction_acceleration = limit_value_by_axis_maximum(settings.acceleration, junction_unit_vec);
-        float sin_theta_d2 = sqrt(0.5*(1.0-junction_cos_theta));
+        float sin_theta_d2 = sqrt(.5*(1-junction_cos_theta));
         block->max_junction_speed_sqr = max(MINIMUM_JUNCTION_SPEED*MINIMUM_JUNCTION_SPEED, (junction_acceleration * settings.junction_deviation * sin_theta_d2)/(1.0-sin_theta_d2)); } } }
 
-  if (!(block->condition & PL_COND_FLAG_SYSTEM_MOTION)) {
-    float nominal_speed = plan_compute_profile_nominal_speed(block);
-    plan_compute_profile_parameters(block, nominal_speed, pl.previous_nominal_speed);
-    pl.previous_nominal_speed = nominal_speed;
+  float nominal_speed = plan_compute_profile_nominal_speed(block);
+  plan_compute_profile_parameters(block, nominal_speed, pl.previous_nominal_speed);
+  pl.previous_nominal_speed = nominal_speed;
 
-    memcpy(pl.previous_unit_vec, unit_vec, sizeof(unit_vec));
-    memcpy(pl.position, target_steps, sizeof(target_steps));
+  memcpy(pl.previous_unit_vec, unit_vec, sizeof(unit_vec));
+  memcpy(pl.position, pl_data.xyz, sizeof(pl_data.xyz));
 
-    block_buffer_head = next_buffer_head;
-    next_buffer_head = plan_next_block_index(block_buffer_head);
+  block_buffer_head = next_buffer_head;
+  next_buffer_head = plan_next_block_index(block_buffer_head);
 
-    planner_recalculate(); }
+  planner_recalculate();
 
   return(PLAN_OK); }
 
@@ -220,9 +213,7 @@ void plan_sync_position() {
     pl.position[X_AXIS] = system_convert_corexy_to_x_axis_steps(sys_position);
     pl.position[Y_AXIS] = system_convert_corexy_to_y_axis_steps(sys_position);
   #else
-    uint8_t idx;
-    for (idx=0; idx<N_AXIS; idx++) {
-      pl.position[idx] = sys_position[idx]; }
+    memcpy(pl.position, sys_position, sizeof(pl.position));
   #endif
 }
 

@@ -1,8 +1,4 @@
 #include "grbl.h"
-#include "fat.h"
-#include "partition.h"
-#include "sd_raw.h"
-#include "sd_raw_config.h"
 
 #define LINE_FLAG_OVERFLOW bit(0)
 
@@ -142,31 +138,15 @@ void protocol_main_loop() {
                     sys.f_override = 100;
                     pl_data.feed_rate = 1200;
                     pl_data.spindle_speed = 255;
-                    pl_data.dwell = 0;
                     pl_data.units = 0;
                     pl_data.distance = 0;
-                    pl_data.laserOn = 1;
                     pl_data.condition = PL_COND_FLAG_RAPID_MOTION;
                     pl_data.gc_pos[X_AXIS] = ((pl_data.xyz[X_AXIS] = plan_get_position(X_AXIS)) - wco[X_AXIS]) / settings.steps_per_mm[X_AXIS];
                     pl_data.gc_pos[Y_AXIS] = ((pl_data.xyz[Y_AXIS] = plan_get_position(Y_AXIS)) - wco[Y_AXIS]) / settings.steps_per_mm[Y_AXIS];
                     spindle_set_speed(SPINDLE_PWM_OFF_VALUE); lcd_state2();
                     char_counter = 0; val = STATUS_OK;
                     while ((c = fat_read_byte(fd)) != 0xff) {
-                      if (c == ';') {
-                        if (sys.abort) { break; }
-
-                        if (sys.state != STATE_HOLD) {
-                          protocol_execute_realtime();
-                          if (sys.abort) { break; } }
-
-                        line[char_counter] = ';';
-
-                        if ((val = gc_execute_line(line)) != STATUS_OK) {
-                          break; }
-
-                        char_counter = 0;
-
-                      } else if (c == '\n' || c == '\r') {
+                      if (c == '\n' || c == '\r') {
                         if (char_counter > 0) {
                           if (sys.abort) { break; }
 
@@ -176,7 +156,7 @@ void protocol_main_loop() {
 
                           line[char_counter] = 0;
 
-                          if ((val = gc_execute_line2(line)) != STATUS_OK) {
+                          if ((val = gc_execute_line(line)) != STATUS_OK) {
                             break; }
 
                           char_counter = 0; }
@@ -248,13 +228,13 @@ void protocol_main_loop() {
             plan_sync_position();
           } else {
             memcpy(wco, sys_position, sizeof(wco));
-            settings_write_coord_data(); }
+            memcpy_to_eeprom_with_checksum(EEPROM_ADDR_PARAMETERS, (char*)&wco, sizeof(wco)); }
         } else {
           sys.state2 = STATE_ORIGIN;
           gc_execute_line("IN;"); }
       } else {
         val = 35;
-        jog_execute_line(1);
+        jog_execute(1);
         while (btn_state && val > 0) {
           _delay_ms(10);
           buttons_check();
@@ -264,31 +244,32 @@ void protocol_main_loop() {
         while (btn_state) {
           protocol_execute_realtime();
           if (sys.abort) { return; }
-          jog_execute_line(2); }
+          jog_execute(2); }
         if (sys.abort) { return; } }
       serial_reset_read_buffer(); }
 
     while ((c = serial_read()) != SERIAL_NO_DATA) {
-      if (c == ';') {
-        if (sys.abort) { return; }
+      if (c == '\n' || c == '\r') {
+        if (char_counter > 0) {
+          if (sys.abort) { break; }
 
-        if (sys.state != STATE_HOLD) {
-          protocol_execute_realtime();
-          if (sys.abort) { return; } }
+          if (sys.state != STATE_HOLD) {
+            protocol_execute_realtime();
+            if (sys.abort) { break; } }
 
-        line[char_counter] = ';';
+          line[char_counter] = 0;
 
-        if (line_flags & LINE_FLAG_OVERFLOW) {
-          report_status_message(STATUS_OVERFLOW);
-        } else if (line[0] == '$') {
-          report_status_message(system_execute_line(line));
-        } else if (sys.state & (STATE_ALARM | STATE_HOMING | STATE_JOG)) {
-          report_status_message(STATUS_SYSTEM_GC_LOCK);
-        } else {
-          report_status_message(gc_execute_line(line)); }
+          if (line_flags & LINE_FLAG_OVERFLOW) {
+            report_status_message(STATUS_OVERFLOW);
+          } else if (line[0] == '$') {
+            report_status_message(system_execute_line(line));
+          } else if (sys.state & (STATE_ALARM | STATE_JOG)) {
+            report_status_message(STATUS_SYSTEM_GC_LOCK);
+          } else {
+            report_status_message(gc_execute_line(line)); }
 
-        line_flags = 0;
-        char_counter = 0;
+          line_flags = 0;
+          char_counter = 0; }
 
       } else if (c == '#') {
 
@@ -303,6 +284,14 @@ void protocol_main_loop() {
           } else {
             line[char_counter++] = c; } } } }
     if (sys.abort) { return; }
+
+    if (STATE_IDLE == sys.state) {
+      if (bit_istrue(settings.flags,BITFLAG_XY_HOME_PIN_AS_ST_ENABLE)) {
+        if ((bit_isfalse(settings.flags,BITFLAG_INVERT_LIMIT_PINS) ? bit_isfalse(STEPPERS_DISABLE_PORT,(1<<STEPPERS_DISABLE_BIT)):bit_istrue(STEPPERS_DISABLE_PORT,(1<<STEPPERS_DISABLE_BIT)))) {
+          if (0 == sys_position[X_AXIS] && 0 == sys_position[Y_AXIS]) {
+            delay_ms(200);
+            if (bit_isfalse(settings.flags,BITFLAG_INVERT_LIMIT_PINS)) { STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT); }
+            else { STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT); } } } } }
 
     if (sys.state != STATE_HOLD) {
       protocol_execute_realtime();
@@ -346,7 +335,7 @@ void protocol_exec_rt_system() {
       } else if (sys.state == STATE_HOMING) {
         if (rt_exec & EXEC_RESET) {
           sys.abort = 1; } }
-      system_clear_exec_state_flag((EXEC_RESET | EXEC_FEED_HOLD)); }
+      sys_rt_exec_state &= ~(EXEC_RESET | EXEC_FEED_HOLD); }
 
     if (rt_exec & EXEC_CYCLE_START) {
       if (sys.state == STATE_IDLE || sys.state == STATE_HOLD) {
@@ -360,11 +349,11 @@ void protocol_exec_rt_system() {
         } else {
           if (!sys.non_modal_dwell) {
             sys.state = STATE_IDLE; } } }
-      system_clear_exec_state_flag(EXEC_CYCLE_START); }
+      bit_false(sys_rt_exec_state,EXEC_CYCLE_START); }
 
     if (rt_exec & EXEC_STATUS_REPORT) {
       lcd_position(); lcd_state();
-      system_clear_exec_state_flag(EXEC_STATUS_REPORT); }
+      bit_false(sys_rt_exec_state,EXEC_STATUS_REPORT); }
 
     if (rt_exec & EXEC_CYCLE_STOP) {
       sys_rt_exec_state |= EXEC_STATUS_REPORT;
@@ -382,7 +371,7 @@ void protocol_exec_rt_system() {
       } else {
         sys.state = STATE_IDLE;
         protocol_auto_cycle_start(); }
-      system_clear_exec_state_flag(EXEC_CYCLE_STOP); } }
+      bit_false(sys_rt_exec_state,EXEC_CYCLE_STOP); } }
 
   if (sys.state & (STATE_CYCLE | STATE_HOMING | STATE_JOG)) {
     st_prep_buffer(); } }

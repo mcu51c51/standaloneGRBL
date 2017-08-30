@@ -1,8 +1,6 @@
 #ifndef BYTEORDERING_H
 #define BYTEORDERING_H
 
-#include <stdint.h>
-
 #define HTOL16(val) (val)
 #define HTOL32(val) (val)
 #define LTOH16(val) (val)

@@ -1,16 +1,5 @@
 #include "grbl.h"
 
-void limits_init() {
-  LIMIT_DDR &= ~(1<<XY_LIMIT_BIT);
-  LIMIT_PORT |= (1<<XY_LIMIT_BIT); }
-
-uint8_t limit_get_state() {
-  uint8_t pin = (LIMIT_PIN & (1<<XY_LIMIT_BIT));
-  if (bit_isfalse(settings.flags,BITFLAG_INVERT_LIMIT_PINS)) { pin ^= (1<<XY_LIMIT_BIT); }
-  if (pin) {
-    return(1); }
-  return(0); }
-
 uint8_t limits_go_home() {
   uint8_t l = sys.state;
   uint8_t idx, i;
@@ -53,11 +42,10 @@ uint8_t limits_go_home() {
       return(0); }
     delay_ms(HOMING_DEBOUNCE_DELAY);
 
-    pl_data.condition = PL_COND_FLAG_SYSTEM_MOTION;
     pl_data.feed_rate = HOMING_FEED_RATE;
     pl_data.xyz[idx] += lround(HOMING_PULLOFF * settings.steps_per_mm[idx]);
     plan_buffer_line();
-    sys.step_control = STEP_CONTROL_EXECUTE_SYS_MOTION;
+    sys.step_control = STEP_CONTROL_NORMAL_OP;
     sys.state = STATE_HOMING;
     lcd_position(); lcd_state();
     st_prep_buffer();
@@ -68,6 +56,7 @@ uint8_t limits_go_home() {
     } while (limit_get_state());
 
     st_reset();
+    plan_reset();
     plan_sync_position();
 
     if (i & EXEC_CYCLE_STOP) {
@@ -77,7 +66,7 @@ uint8_t limits_go_home() {
 
     pl_data.xyz[idx] = plan_get_position(idx) + lround(settings.steps_per_mm[idx] / 11);
     plan_buffer_line();
-    sys.step_control = STEP_CONTROL_EXECUTE_SYS_MOTION;
+    sys.step_control = STEP_CONTROL_NORMAL_OP;
     sys.state = STATE_HOMING;
     st_prep_buffer();
     st_wake_up();
@@ -85,7 +74,6 @@ uint8_t limits_go_home() {
       st_prep_buffer();
     } while (!(sys_rt_exec_state & EXEC_CYCLE_STOP));
 
-    st_reset();
     sys_rt_exec_state &= ~EXEC_CYCLE_STOP;
     sys_position[idx] = 0;
     plan_sync_position();
